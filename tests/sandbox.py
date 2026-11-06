@@ -14,5 +14,7 @@ for var, sub in (("LOCALAPPDATA", "localappdata"), ("USERPROFILE", "home"), ("HO
     os.makedirs(os.path.join(ROOT, sub), exist_ok=True)
     os.environ[var] = os.path.join(ROOT, sub)
 tempfile.tempdir = None  # gettempdir() возьмёт новый %TEMP%
+if sys.platform == "linux":
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "build", "res"))
 assert "restore_apps" not in sys.modules, "sandbox нужно импортировать до restore_apps"
 atexit.register(shutil.rmtree, ROOT, ignore_errors=True)

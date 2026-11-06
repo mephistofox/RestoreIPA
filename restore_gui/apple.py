@@ -29,11 +29,17 @@ UNICORN_VERSION = "2.1.4"
 UNICORN_SHA256 = "d8f9a89222ffa74493a1d47090e17f8e1db8ac171a3128c6a76a4ea09de11469"  # как в исходниках ipatool
 # Закреплённые сборки ipatool; Linux дополнительно применяет patches/ipatool-restore-auth.patch.
 # На macOS — хеш кода без подписи (ipatool_digest): PyInstaller переподписывает программы внутри .app
+try:
+    from restore_linux_engine import IPATOOL_SHA256 as _LINUX_ENGINE_SHA256
+except ImportError:
+    _LINUX_ENGINE_SHA256 = "d0821d31cdd27acc3e7a33a1e5310a44d22ce22008e1cfa0688a9ce13dadaa09"
+
+
 IPATOOL_SHA256 = {
     "win32-amd64": "7b83589b74ad533f5d5dbab0ca87a5cb76b123bcbeb2553d57e9c154e35d8755",
     "darwin-arm64": "f64c6ccdd10548ef1f0ad69fd539feeee03831fdb4c18ce5946ebaf7329796df",
     "darwin-x86_64": "95108a8328021a4cefe415cb38086e81e9a56c180decc9fcb60e2bdea418c249",
-    "linux-x86_64": "d0821d31cdd27acc3e7a33a1e5310a44d22ce22008e1cfa0688a9ce13dadaa09",
+    "linux-x86_64": _LINUX_ENGINE_SHA256,
 }
 # адреса, без которых не работает вход/скачивание (для «Проверить связь с Apple»)
 APPLE_HOSTS = (

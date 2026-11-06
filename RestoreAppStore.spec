@@ -26,6 +26,8 @@ else:
     binaries = [(f"{RES}/ipatool.exe", "."), (f"{RES}/libunicorn.dll", ".")]
 # segno — QR-код в «Поддержать», если нет картинки; модули Qt ниже нужны QML и импортируются не из Python
 hiddenimports = ["restore_apps", "segno", "PySide6.QtQuick", "PySide6.QtQuickControls2"]
+if LINUX:
+    hiddenimports.append("restore_linux_engine")
 # pymobiledevice3 встроен для режима `exe --pmd` (установка IPA); подмодули он грузит динамически.
 # pytun_pmd3 — его зависимость с wintun.dll внутри пакета: без collect_all dll не попадает в сборку
 # и `--pmd lockdown …` падает при импорте.
@@ -37,7 +39,7 @@ for pkg in ("pymobiledevice3", "pytun_pmd3"):
 
 a = Analysis(
     ["restore_apps_gui.py"],
-    pathex=["."],
+    pathex=[".", RES] if LINUX else ["."],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

@@ -538,6 +538,29 @@ class Footprint(unittest.TestCase):
             self.assertNotIn(secret, shown)
         self.assertEqual(shown.count("***"), 3)
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux build manifest")
+    def test_compiled_engine_digest_accepts_local_build_and_rejects_tampering(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            engine = base / "ipatool"
+            engine.write_bytes(b"local engine built with another compiler\n")
+            digest = "f548996d2166e6947861d41b61e1e71d3e6e2f9405fd9b3862538ed3c80ee220"
+            (base / "restore_linux_engine.py").write_text(f"IPATOOL_SHA256 = {digest!r}\n")
+            check = """from pathlib import Path
+from restore_gui import apple
+import sys
+p = Path(sys.argv[1])
+assert apple.ipatool_genuine(p) is True, 'legitimate local build rejected'
+p.write_bytes(b'tampered engine')
+assert apple.ipatool_genuine(p) is False, 'modified local build accepted'
+"""
+            env = dict(os.environ, PYTHONPATH=str(base))
+            result = subprocess.run([sys.executable, "-c", check, str(engine)], env=env,
+                                    capture_output=True, text=True, timeout=20,
+                                    cwd=Path(__file__).resolve().parent.parent)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_linux_asset_readiness_uses_new_framework_cache(self):
         with tempfile.TemporaryDirectory() as folder:
             cache = Path(folder) / "ipatool"
