@@ -491,6 +491,64 @@ class Window(unittest.TestCase):
                 storage.forget_download(1, "2")
                 storage.forget_download(1, "3")
 
+    @unittest.skipUnless(sys.platform == "linux", "Linux authentication isolation")
+    def test_new_login_discards_abandoned_account_cookies(self):
+        from unittest import mock
+        import restore_apps as core
+        from restore_gui import tasks
+        b = self.backend
+        session = core.IPATOOL_HOME / ".ipatool"
+        cookie = session / "cookies"
+        observed = []
+
+        def respond(cmd, quiet_json=False):
+            email = cmd[cmd.index("--email") + 1]
+            observed.append((email, cookie.read_text() if cookie.exists() else None))
+            session.mkdir(parents=True, exist_ok=True)
+            cookie.write_text(email)
+            return (1, "2FA code is required") if len(observed) == 1 else (1, "sign-in failed")
+
+        with mock.patch.object(b, "stream", side_effect=respond), \
+                mock.patch.object(b, "ask_main", return_value=None), \
+                mock.patch.object(b, "post"), mock.patch.object(b, "find_tool", return_value=None), \
+                mock.patch.object(tasks, "sap_ready", return_value=True):
+            b.wipe_session(revoke=False)
+            for email in ("a@example.com", "b@example.com", "a@example.com"):
+                b.task_login("ipatool", email, "test-password")
+        self.assertEqual(observed, [("a@example.com", None), ("b@example.com", None),
+                                    ("a@example.com", None)])
+        b.wipe_session(revoke=False)
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux authentication isolation")
+    def test_2fa_continuation_keeps_its_challenge_cookie(self):
+        from unittest import mock
+        import restore_apps as core
+        from restore_gui import tasks
+        b = self.backend
+        session = core.IPATOOL_HOME / ".ipatool"
+        cookie = session / "cookies"
+        session.mkdir(parents=True, exist_ok=True)
+        cookie.write_text("abandoned-account")
+        observed = []
+
+        def respond(cmd, quiet_json=False):
+            observed.append(cookie.read_text() if cookie.exists() else None)
+            if "--auth-code" in cmd:
+                self.assertEqual(cmd[cmd.index("--auth-code") + 1], "123456")
+                return 0, "success=true"
+            session.mkdir(parents=True, exist_ok=True)
+            cookie.write_text("current-challenge")
+            return 1, "2FA code is required"
+
+        with mock.patch.object(b, "stream", side_effect=respond), \
+                mock.patch.object(b, "ask_main", return_value="123456"), \
+                mock.patch.object(b, "post"), mock.patch.object(b, "session_ok", return_value=True), \
+                mock.patch.object(b, "find_tool", return_value=None), \
+                mock.patch.object(tasks, "sap_ready", return_value=True):
+            b.task_login("ipatool", "a@example.com", "test-password")
+        self.assertEqual(observed, [None, "current-challenge"])
+        b.wipe_session(revoke=False)
+
     def test_login_asks_2fa_even_when_ipatool_exits_0(self):
         """ipatool 2.7: «2FA code is required…» с кодом возврата 0 — это не вход, нужно спросить код (ошибка 1.0.0)."""
         from restore_gui import tasks

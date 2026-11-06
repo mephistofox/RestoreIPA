@@ -148,7 +148,7 @@ def need(binary, hint):
     return path
 
 
-SECRET_FLAGS = ("--password", "--keychain-passphrase")
+SECRET_FLAGS = ("--password", "--keychain-passphrase", "--auth-code")
 NEEDS_CODE = re.compile(r"2fa|auth.?code|verification|two.?factor", re.I)  # ipatool просит код подтверждения
 
 
@@ -169,8 +169,15 @@ def ipatool_env(home=None):
     if sys.platform == "darwin":
         _link_keychains(home)
     drive, rest = os.path.splitdrive(str(home))
-    return dict(os.environ, HOME=str(home), USERPROFILE=str(home), HOMEDRIVE=drive, HOMEPATH=rest or "\\",
-                LOCALAPPDATA=str(DATA_DIR), XDG_CACHE_HOME=str(DATA_DIR))
+    env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), HOMEDRIVE=drive, HOMEPATH=rest or "\\",
+               LOCALAPPDATA=str(DATA_DIR), XDG_CACHE_HOME=str(DATA_DIR))
+    if sys.platform == "linux":
+        # New ipatool prefers inherited XDG paths and the shared desktop keyring over HOME.
+        env.pop("XDG_STATE_HOME", None)
+        env.pop("XDG_DATA_HOME", None)
+        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/restore-keyring-bus"
+        env["IPATOOL_DISABLE_AUTH_RETRIES"] = "1"
+    return env
 
 
 def _link_keychains(home):

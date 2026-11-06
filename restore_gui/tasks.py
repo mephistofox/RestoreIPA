@@ -112,10 +112,10 @@ class TasksMixin:
         if path and Path(path).exists():
             # встроенный ipatool запускается, только если совпадает с официальным (apple.IPATOOL_SHA256)
             if name == "ipatool" and core.FROZEN and path == bundled(name) and ipatool_genuine(path) is False:
-                self.log(f"Встроенный ipatool не совпадает с официальным ipatool 2.7.0 (файл изменён): {path}")
+                self.log(f"Встроенный ipatool не совпадает с проверенной сборкой Restore (файл изменён): {path}")
                 if ask:
                     self.show_notice("ipatool изменён",
-                                     "Встроенный ipatool не совпадает с официальным: файл повреждён или изменён, "
+                                     "Встроенный ipatool не совпадает с проверенной сборкой: файл повреждён или изменён, "
                                      "поэтому программа его не запускает.\n\n"
                                      "Переустановите Restore, скачав его со страницы релизов на GitHub.")
                 return None
@@ -222,6 +222,8 @@ class TasksMixin:
 
     # ---------- задачи (выполняются в потоке) ----------
     def task_login(self, ipatool, email, password):
+        if sys.platform == "linux":
+            self.wipe_session(revoke=False)  # fresh login; preserve cookies through the 2FA loop
         code = None
         if not sap_ready():
             self.log("Первый вход на этом компьютере: ipatool скачивает служебные файлы Apple для подписи "

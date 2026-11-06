@@ -27,13 +27,13 @@ SESSION_LOST = re.compile(r"failed to get account|keyring|not logged|sign.?in|pa
 SCAN_ROOT = core.DATA_DIR / "scan"
 UNICORN_VERSION = "2.1.4"
 UNICORN_SHA256 = "d8f9a89222ffa74493a1d47090e17f8e1db8ac171a3128c6a76a4ea09de11469"  # как в исходниках ipatool
-# официальный ipatool 2.7.0 (build.ps1, build_mac.sh): встроенный сверяется с ним перед запуском.
+# Закреплённые сборки ipatool; Linux дополнительно применяет patches/ipatool-restore-auth.patch.
 # На macOS — хеш кода без подписи (ipatool_digest): PyInstaller переподписывает программы внутри .app
 IPATOOL_SHA256 = {
     "win32-amd64": "7b83589b74ad533f5d5dbab0ca87a5cb76b123bcbeb2553d57e9c154e35d8755",
     "darwin-arm64": "f64c6ccdd10548ef1f0ad69fd539feeee03831fdb4c18ce5946ebaf7329796df",
     "darwin-x86_64": "95108a8328021a4cefe415cb38086e81e9a56c180decc9fcb60e2bdea418c249",
-    "linux-x86_64": "ea99060f13b4b92bb26241bc91a1ee4e18d2819ad79a966da531996708a2b31d",
+    "linux-x86_64": "d0821d31cdd27acc3e7a33a1e5310a44d22ce22008e1cfa0688a9ce13dadaa09",
 }
 # адреса, без которых не работает вход/скачивание (для «Проверить связь с Apple»)
 APPLE_HOSTS = (
@@ -174,7 +174,8 @@ def seed_unicorn():
 
 def sap_ready():
     """Скачаны ли уже служебные файлы Apple, нужные ipatool для входа."""
-    d = core.IPATOOL_CACHE / "sap" / "apple-assets-v2"
+    name = "apple-assets-macos-27-26A434-arm64-v1" if sys.platform.startswith("linux") else "apple-assets-v2"
+    d = core.IPATOOL_CACHE / "sap" / name
     try:
         return d.is_dir() and any(d.iterdir())
     except OSError:

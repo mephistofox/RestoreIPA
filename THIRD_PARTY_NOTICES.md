@@ -4,7 +4,7 @@
 
 | Компонент | Версия | Лицензия | Для чего | Исходники |
 |---|---|---|---|---|
-| ipatool | 2.7.0 | MIT | вход в Apple ID, список версий, скачивание IPA | https://github.com/majd/ipatool |
+| ipatool | Windows/macOS: 2.7.0; Linux: 2.8.0-dev.d9c0247.restore1 | MIT | вход в Apple ID, список версий, скачивание IPA | https://github.com/majd/ipatool |
 | Unicorn Engine (`libunicorn.dll`) | 2.1.4 | GPL-2.0 | нужен ipatool для подписи запросов при входе | https://github.com/unicorn-engine/unicorn |
 | pymobiledevice3 | 11.41.2 | GPL-3.0-or-later | установка IPA на iPhone по USB | https://github.com/doronz88/pymobiledevice3 |
 | pytun-pmd3 | 3.0.3 | GPL-3.0-or-later | зависимость pymobiledevice3 (сетевые туннели к iPhone) | https://github.com/doronz88/pytun-pmd3 |
@@ -22,6 +22,8 @@
 Библиотеки Qt подключаются динамически: в установленной версии это отдельные файлы `Qt6*.dll` в папке `_internal\PySide6`, их можно заменить своей сборкой Qt той же версии (условие LGPL-3.0).
 
 `ipatool` и `libunicorn.dll` при сборке скачиваются из официальных релизов на GitHub, SHA-256 сверяется (см. `build.ps1`).
+
+В Linux `ipatool` собирается из официального коммита `d9c0247daea564d3ec7d04a9b015d0a29af66b04`: архив исходников и готовый бинарный файл проверяются по SHA-256 (см. `build_linux.sh`). Сборка применяет локальный патч `patches/ipatool-restore-auth.patch`: Restore отключает автоматические повторы входа; новый вход очищает прежние cookies, а сессия хранится в отдельном зашифрованном файле без общего хранилища рабочего стола. Библиотека Unicorn для Linux загружается самим ipatool при подготовке компонентов Apple.
 
 ## Каталог приложений
 

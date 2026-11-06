@@ -531,6 +531,52 @@ class Footprint(unittest.TestCase):
             self.assertFalse(core._writable(Path(d) / "нет"))
             self.assertFalse((Path(d) / "нет").exists(), "проба создала папку")
 
+    def test_authentication_diagnostics_mask_two_factor_code(self):
+        shown = core.masked(["ipatool", "--keychain-passphrase", "local-test-key", "auth", "login",
+                             "--password", "test-password", "--auth-code", "314159"])
+        for secret in ("local-test-key", "test-password", "314159"):
+            self.assertNotIn(secret, shown)
+        self.assertEqual(shown.count("***"), 3)
+
+    def test_linux_asset_readiness_uses_new_framework_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache = Path(folder) / "ipatool"
+            legacy = cache / "sap" / "apple-assets-v2"
+            legacy.mkdir(parents=True)
+            (legacy / "CoreFP").write_bytes(b"old")
+            with mock.patch.object(core, "IPATOOL_CACHE", cache), mock.patch.object(sys, "platform", "linux"):
+                self.assertFalse(apple.sap_ready(), "старые файлы не готовы для нового движка")
+                current = cache / "sap" / "apple-assets-macos-27-26A434-arm64-v1"
+                current.mkdir()
+                (current / "AppleMediaServices").write_bytes(b"new")
+                self.assertTrue(apple.sap_ready())
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux engine state")
+    def test_linux_engine_keeps_session_out_of_inherited_xdg_directories(self):
+        import subprocess
+        engine = Path(__file__).resolve().parent.parent / "build/res/ipatool"
+        self.assertTrue(engine.is_file(), "prepare the pinned Linux engine before testing")
+        with tempfile.TemporaryDirectory() as folder:
+            base = Path(folder)
+            home, outside = base / "private-home", base / "outside"
+            with mock.patch.dict(os.environ, XDG_STATE_HOME=str(outside / "state"),
+                                 XDG_DATA_HOME=str(outside / "data"),
+                                 DBUS_SESSION_BUS_ADDRESS="unix:path=/nonexistent/restore-test-bus"):
+                env = core.ipatool_env(home)
+            # auth info only reads a local session; it makes no Apple requests.
+            result = subprocess.run([str(engine), "--non-interactive", "--keychain-passphrase",
+                                     "fixture-key", "auth", "info"], env=env, timeout=20,
+                                    capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, "empty fixture must have no account")
+            self.assertTrue((home / ".ipatool").is_dir())
+            self.assertFalse(outside.exists(), "session escaped the private child home")
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux keyring isolation")
+    def test_linux_child_cannot_use_desktop_secret_service(self):
+        with mock.patch.dict(os.environ, DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus"):
+            env = core.ipatool_env()
+        self.assertEqual(env["DBUS_SESSION_BUS_ADDRESS"], "unix:path=/nonexistent/restore-keyring-bus")
+
     def test_ipatool_cache_and_scan_copies_inside_data_dir(self):
         env = core.ipatool_env()
         self.assertEqual((env["LOCALAPPDATA"], env["HOME"]), (str(core.DATA_DIR), str(core.IPATOOL_HOME)))

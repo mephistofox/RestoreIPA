@@ -234,7 +234,9 @@ OPENSSL_DIR=<папка OpenSSL для x86_64> arch -x86_64 bash build_mac.sh
 
 ### Linux
 
-Нужны Python 3.12 с pip и venv, `curl`, `tar`, `sha256sum` и системные библиотеки Qt для Wayland/X11. Затем:
+Нужны Python 3.12 с pip и venv, `curl`, `tar`, `patch`, `sha256sum` и системные библиотеки Qt для Wayland/X11. Затем:
+
+Для сборки Linux-движка входа также нужны **Go** и **C-компилятор** (`gcc`): скрипт использует Go 1.26.5 и при необходимости скачивает этот toolchain. В Linux используется предварительная версия ipatool `2.8.0-dev.d9c0247.restore1` из [официального коммита](https://github.com/majd/ipatool/commit/d9c0247daea564d3ec7d04a9b015d0a29af66b04) с новым механизмом запросов Apple. Это обновление после 2.7.0, которое автор [рекомендует до выпуска 2.8.0](https://github.com/majd/ipatool/issues/627). Сборка применяет локальный патч `patches/ipatool-restore-auth.patch`: Restore отключает автоматические повторы входа; новый вход очищает прежние cookies, а сессия хранится в отдельном зашифрованном файле без общего хранилища рабочего стола. Исходный архив и собранный бинарный файл проверяются по SHA-256; сборка проверена с Go 1.26.5 и системным GCC на Arch Linux.
 
 ```bash
 bash build_linux.sh
@@ -247,7 +249,9 @@ uv venv --python 3.12 --seed build/linux-venv
 bash build_linux.sh
 ```
 
-Скрипт использует `build/linux-venv`, проверяет хеши зависимостей из существующего `requirements-lock.txt` и официальный Linux ipatool 2.7.0. Затем запускает все тесты, собирает папку `dist/linux/RestoreAppStore`, проверяет отсутствие файлов Windows, интерфейс и встроенный USB-установщик с отдельной временной домашней папкой и создаёт `dist/Restore-<версия>-linux-x86_64.tar.gz` с файлом `.sha256`. Подробный журнал PyInstaller — `build/linux-build.log`.
+Для проверки новой сборки рядом с запущенной используйте `RESTORE_DIST_ROOT=dist/linux-auth bash build_linux.sh`: папка работающего приложения останется доступной до его штатного закрытия.
+
+Скрипт использует `build/linux-venv`, проверяет хеши зависимостей из существующего `requirements-lock.txt` и собирает Linux ipatool из закреплённых исходников. Затем запускает все тесты, собирает папку `dist/linux/RestoreAppStore`, проверяет отсутствие файлов Windows, интерфейс и встроенный USB-установщик с отдельной временной домашней папкой и создаёт `dist/Restore-<версия>-linux-x86_64.tar.gz` с файлом `.sha256`. Подробный журнал PyInstaller — `build/linux-build.log`.
 
 ### Пакеты сборки
 

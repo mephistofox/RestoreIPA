@@ -1,0 +1,153 @@
+--- a/cmd/common.go
++++ b/cmd/common.go
+@@ -111,9 +111,10 @@
+ 	dependencies.CookieJar = newCookieJar(stateDirectory)
+ 	dependencies.Keychain = newKeychain(stateDirectory, interactive)
+ 	dependencies.AppStore = appstore.NewAppStore(appstore.Args{
+-		CookieJar:       dependencies.CookieJar,
+-		OperatingSystem: dependencies.OS,
+-		Keychain:        dependencies.Keychain,
+-		Machine:         dependencies.Machine,
++		DisableAuthenticationRetries: os.Getenv("IPATOOL_DISABLE_AUTH_RETRIES") == "1",
++		CookieJar:                    dependencies.CookieJar,
++		OperatingSystem:              dependencies.OS,
++		Keychain:                     dependencies.Keychain,
++		Machine:                      dependencies.Machine,
+ 	})
+ }
+--- a/pkg/appstore/appstore.go
++++ b/pkg/appstore/appstore.go
+@@ -55,16 +55,18 @@
+ 	macDecrypterFactory macPackageDecrypterFactory
+ 	actionSignerFactory ActionSignerFactory
+ 	authRetrySleep      func(time.Duration)
++	disableAuthRetries  bool
+ 	machine             machine.Machine
+ 	os                  operatingsystem.OperatingSystem
+ }
+ 
+ type Args struct {
+-	Keychain            keychain.Keychain
+-	CookieJar           http.CookieJar
+-	OperatingSystem     operatingsystem.OperatingSystem
+-	Machine             machine.Machine
+-	ActionSignerFactory ActionSignerFactory
++	DisableAuthenticationRetries bool
++	Keychain                     keychain.Keychain
++	CookieJar                    http.CookieJar
++	OperatingSystem              operatingsystem.OperatingSystem
++	Machine                      machine.Machine
++	ActionSignerFactory          ActionSignerFactory
+ }
+ 
+ // NewAppStore creates a client using the compiled Store profile.
+@@ -86,6 +88,7 @@
+ 	}
+ 
+ 	return &appstore{
++		disableAuthRetries:  args.DisableAuthenticationRetries,
+ 		keychain:            args.Keychain,
+ 		loginClient:         http.NewClient[loginResult](http.Args{CookieJar: args.CookieJar, Authentication: true, Executor: backend.Client("authenticate")}),
+ 		searchClient:        http.NewClient[searchResult](clientArgs),
+--- a/pkg/appstore/appstore_login.go
++++ b/pkg/appstore/appstore_login.go
+@@ -229,7 +229,11 @@
+ }
+ 
+ func (t *appstore) sendAuthenticationRequest(request http.Request) (http.Result[loginResult], error) {
+-	statuses := make([]string, 0, maxAuthenticationRequestAttempts)
++	attempts := maxAuthenticationRequestAttempts
++	if t.disableAuthRetries {
++		attempts = 1
++	}
++	statuses := make([]string, 0, attempts)
+ 	onlyHTTP := true
+ 
+ 	sleep := t.authRetrySleep
+@@ -257,7 +261,7 @@
+ 
+ 		statuses = append(statuses, outcome)
+ 
+-		if attempt == maxAuthenticationRequestAttempts {
++		if attempt == attempts {
+ 			summary := strings.Join(statuses, ", ")
+ 			if onlyHTTP {
+ 				// Preserve the existing diagnostic format for HTTP-only failures.
+@@ -266,7 +270,7 @@
+ 
+ 			return result, fmt.Errorf(
+ 				"authentication request failed after %d attempts (%s): %w",
+-				maxAuthenticationRequestAttempts, summary, authenticationRequestError(err),
++				attempts, summary, authenticationRequestError(err),
+ 			)
+ 		}
+ 
+@@ -352,7 +356,7 @@
+ 		}
+ 
+ 		retry = true
+-	} else if attempt == 1 && res.Data.FailureType == FailureTypeInvalidCredentials {
++	} else if !t.disableAuthRetries && attempt == 1 && res.Data.FailureType == FailureTypeInvalidCredentials {
+ 		retry = true
+ 	} else if res.Data.FailureType == "" && res.Data.CustomerMessage == CustomerMessageBadLogin {
+ 		if authCode == "" {
+--- /dev/null
++++ b/pkg/appstore/restore_auth_test.go
+@@ -0,0 +1,57 @@
++package appstore
++
++import (
++	"errors"
++	"io"
++	"testing"
++	"time"
++
++	apphttp "github.com/majd/ipatool/v2/pkg/http"
++	"go.uber.org/mock/gomock"
++)
++
++func TestRestoreDoesNotAutomaticallyResubmitAuthentication(t *testing.T) {
++	for name, failure := range map[string]error{
++		"empty response": &apphttp.UnexpectedResponseError{StatusCode: 204},
++		"unavailable":    &apphttp.UnexpectedResponseError{StatusCode: 503},
++		"transport":      &apphttp.TransportError{Err: io.EOF},
++	} {
++		t.Run(name, func(t *testing.T) {
++			ctrl := gomock.NewController(t)
++			client := apphttp.NewMockClient[loginResult](ctrl)
++			client.EXPECT().Send(gomock.Any()).Return(apphttp.Result[loginResult]{}, failure).Times(1)
++			sut := NewAppStore(Args{DisableAuthenticationRetries: true}).(*appstore)
++			sut.loginClient = client
++			sut.authRetrySleep = func(time.Duration) { t.Fatal("Restore must not wait and retry credentials") }
++			_, err := sut.sendAuthenticationRequest(apphttp.Request{})
++			if !errors.Is(err, failure) {
++				t.Fatalf("expected original error, got %v", err)
++			}
++		})
++	}
++}
++
++func TestRestoreDoesNotRetryDecodedCredentialRejection(t *testing.T) {
++	sut := NewAppStore(Args{DisableAuthenticationRetries: true}).(*appstore)
++	response := apphttp.Result[loginResult]{StatusCode: 200, Data: loginResult{
++		FailureType: FailureTypeInvalidCredentials, CustomerMessage: "invalid credentials",
++	}}
++	retry, _, err := sut.parseLoginResponse(&response, 1, "", testAuthEndpoint)
++	if retry || err == nil {
++		t.Fatalf("credential rejection must stop this attempt: retry=%v, err=%v", retry, err)
++	}
++}
++
++func TestRestoreStillAcceptsStoreRedirectsAndTwoFactorChallenges(t *testing.T) {
++	sut := NewAppStore(Args{DisableAuthenticationRetries: true}).(*appstore)
++	challenge := apphttp.Result[loginResult]{StatusCode: 200, Data: loginResult{
++		CustomerMessage: CustomerMessageBadLogin,
++	}}
++	if retry, _, err := sut.parseLoginResponse(&challenge, 1, "", testAuthEndpoint); retry || !errors.Is(err, ErrAuthCodeRequired) {
++		t.Fatalf("expected explicit 2FA challenge: retry=%v, err=%v", retry, err)
++	}
++	response := apphttp.Result[loginResult]{StatusCode: 302, Headers: map[string]string{"location": testAuthEndpoint}}
++	if retry, target, err := sut.parseLoginResponse(&response, 1, "", testAuthEndpoint); !retry || target != testAuthEndpoint || err != nil {
++		t.Fatalf("expected valid Store redirect: retry=%v, target=%q, err=%v", retry, target, err)
++	}
++}
