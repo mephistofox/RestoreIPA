@@ -423,13 +423,14 @@ class IpatoolIntegrity(unittest.TestCase):
             with mock.patch.dict(apple.IPATOOL_SHA256, {key: ""}):
                 self.assertIsNone(apple.ipatool_genuine(str(tool)))  # для системы без сборки хеша нет
 
-    @unittest.skipUnless(sys.platform.startswith("win"), "ipatool.exe для Windows")
+    @unittest.skipUnless(sys.platform.startswith("win") or sys.platform.startswith("linux"), "Windows/Linux")
     def test_hash_matches_ipatool_from_build(self):
-        """IPATOOL_SHA256 — хеш того самого ipatool, который build.ps1 скачивает и сверяет (не устарел)."""
-        res = Path(__file__).resolve().parent.parent / "build" / "res" / "ipatool.exe"
+        """Встроенный официальный ipatool проходит проверку целостности на целевой платформе."""
+        name = "ipatool.exe" if sys.platform.startswith("win") else "ipatool"
+        res = Path(__file__).resolve().parent.parent / "build" / "res" / name
         if not res.is_file():
-            self.skipTest("сборка ещё не запускалась: нет build\\res\\ipatool.exe")
-        self.assertEqual(apple.sha256_file(res), apple.IPATOOL_SHA256["win32-amd64"])
+            self.skipTest(f"сборка ещё не запускалась: нет build/res/{name}")
+        self.assertIs(apple.ipatool_genuine(str(res)), True)
 
 
 def lookup_answer(body):

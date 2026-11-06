@@ -556,6 +556,8 @@ class Backend(QObject, TasksMixin, DetailMixin, PrefsMixin):
             "1. iPhone и кабель. Разблокируйте телефон и нажмите «Доверять».\n\n"
             + ("2. На Mac ничего дополнительно ставить не нужно: iPhone macOS видит сама.\n\n"
                if sys.platform == "darwin" else
+               "2. На Linux нужен запущенный usbmuxd. Установите пакет usbmuxd своего дистрибутива.\n\n"
+               if sys.platform.startswith("linux") else
                "2. Драйвер Apple на Windows: iTunes или «Устройства Apple» (Apple Devices) из Microsoft Store.\n\n")
             + "3. Apple ID, под которым приложение когда-то скачивалось. Apple отдаёт только то, что есть в "
             "истории покупок этого аккаунта.\n\n"

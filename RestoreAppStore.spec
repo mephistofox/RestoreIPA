@@ -13,13 +13,14 @@ from PyInstaller.utils.hooks import collect_all
 
 ONEDIR = os.environ.get("RESTORE_ONEDIR") == "1"
 MAC = sys.platform == "darwin"  # macOS: всегда Restore.app (папкой), ipatool для Mac, без Unicorn и ресурса версии
+LINUX = sys.platform.startswith("linux")
 
 RES = "build/res"
 datas = [("removed_ru_appstore_app_ids.csv", "."), ("assets/icon.ico", "."), ("assets/cloudtips_qr.png", "."),
          ("restore_gui/qml", "restore_gui/qml"),  # интерфейс (QML) — рядом с модулями пакета, см. app.QML_DIR
          ("restore_gui/fonts", "restore_gui/fonts")]  # шрифт Manrope и его лицензия OFL
-if MAC:
-    binaries = [(f"{RES}/ipatool", ".")]  # Unicorn ipatool нужен только на Windows
+if MAC or LINUX:
+    binaries = [(f"{RES}/ipatool", ".")]  # отдельная библиотека Unicorn нужна только на Windows
 else:
     datas.append((f"{RES}/UNICORN_COPYING.txt", "."))
     binaries = [(f"{RES}/ipatool.exe", "."), (f"{RES}/libunicorn.dll", ".")]
@@ -45,7 +46,7 @@ a = Analysis(
     # Pillow ему нужен только для трансляции экрана в веб-инспекторе (cdp_screencast) — тоже не используется.
     # sslpsk_pmd3 (TLS-PSK для беспроводных туннелей iOS 17+) установке по кабелю не нужен, а на macOS везёт свой
     # старый libcrypto.3.dylib, который подменяет нужный cryptography (на Intel тот падает: нет EVP_DigestSqueeze)
-    excludes=["IPython", "jedi", "parso", "traitlets", "av", "PIL"] + (["sslpsk_pmd3"] if MAC else []),
+    excludes=["IPython", "jedi", "parso", "traitlets", "av", "PIL"] + (["sslpsk_pmd3"] if MAC or LINUX else []),
     noarchive=False,
 )
 
@@ -66,19 +67,22 @@ DROP = re.compile(
 
 # на macOS QtGui ссылается на QtDBus, а модуль QtQuick — на QtOpenGL (на Windows ни то ни другое не нужно)
 MAC_KEEP = re.compile(r"qtdbus|qtopengl(?!widgets)")
+LINUX_KEEP = re.compile(r"qt6?(dbus|opengl(?!widgets)|wayland)")
 
 
 def needed(entry):
     dest = entry[0].replace("\\", "/").lower()
     if "/translations/" in dest:  # переводы Qt: оставляем только русский для стандартных окон
         return dest.endswith("qtbase_ru.qm")
-    if MAC and MAC_KEEP.search(dest):
+    if (MAC and MAC_KEEP.search(dest)) or (LINUX and LINUX_KEEP.search(dest)):
         return True
     if len(entry) > 2 and entry[2] == "SYMLINK":
         # на macOS у каждого фреймворка Qt есть ссылка вида «QtWebSockets» -> PySide6/…/QtWebSockets.framework;
         # если сам фреймворк вырезан, ссылка остаётся битой и ломает подпись .app — проверяем, куда она ведёт
         target = str(entry[1]).replace("\\", "/").lower()
-        if "pyside6" in target and DROP.search(target) and not (MAC and MAC_KEEP.search(target)):
+        if "pyside6" in target and DROP.search(target) and not (
+            (MAC and MAC_KEEP.search(target)) or (LINUX and LINUX_KEEP.search(target))
+        ):
             return False
     return not ("pyside6" in dest and DROP.search(dest))
 
@@ -86,8 +90,9 @@ def needed(entry):
 a.binaries = [e for e in a.binaries if needed(e)]
 a.datas = [e for e in a.datas if needed(e)]
 pyz = PYZ(a.pure)
-common = dict(name="RestoreAppStore", icon="assets/icon.ico", version="build/version_info.txt", console=False,
-              upx=False)
+common = dict(name="RestoreAppStore", console=LINUX, upx=False)
+if not LINUX:
+    common.update(icon="assets/icon.ico", version="build/version_info.txt")
 if MAC:
     VERSION = re.search(r'__version__\s*=\s*"([^"]+)"', open("restore_apps.py", encoding="utf-8").read()).group(1)
     exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="RestoreAppStore", console=False, upx=False)
@@ -98,7 +103,7 @@ if MAC:
                              "CFBundleVersion": VERSION, "LSMinimumSystemVersion": "12.0",
                              "NSHighResolutionCapable": True,
                              "LSApplicationCategoryType": "public.app-category.utilities"})
-elif ONEDIR:
+elif ONEDIR or LINUX:
     exe = EXE(pyz, a.scripts, [], exclude_binaries=True, **common)
     coll = COLLECT(exe, a.binaries, a.datas, name="RestoreAppStore", upx=False)
 else:

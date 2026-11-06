@@ -33,6 +33,7 @@ IPATOOL_SHA256 = {
     "win32-amd64": "7b83589b74ad533f5d5dbab0ca87a5cb76b123bcbeb2553d57e9c154e35d8755",
     "darwin-arm64": "f64c6ccdd10548ef1f0ad69fd539feeee03831fdb4c18ce5946ebaf7329796df",
     "darwin-x86_64": "95108a8328021a4cefe415cb38086e81e9a56c180decc9fcb60e2bdea418c249",
+    "linux-x86_64": "ea99060f13b4b92bb26241bc91a1ee4e18d2819ad79a966da531996708a2b31d",
 }
 # адреса, без которых не работает вход/скачивание (для «Проверить связь с Apple»)
 APPLE_HOSTS = (
