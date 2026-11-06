@@ -247,7 +247,7 @@ uv venv --python 3.12 --seed build/linux-venv
 bash build_linux.sh
 ```
 
-Скрипт использует `build/linux-venv`, проверяет хеши зависимостей из существующего `requirements-lock.txt` и официальный Linux ipatool 2.7.0. Затем запускает все тесты, собирает папку `dist/RestoreAppStore`, проверяет интерфейс и встроенный USB-установщик с отдельной временной домашней папкой и создаёт `dist/Restore-<версия>-linux-x86_64.tar.gz` с файлом `.sha256`. Подробный журнал PyInstaller — `build/linux-build.log`.
+Скрипт использует `build/linux-venv`, проверяет хеши зависимостей из существующего `requirements-lock.txt` и официальный Linux ipatool 2.7.0. Затем запускает все тесты, собирает папку `dist/linux/RestoreAppStore`, проверяет отсутствие файлов Windows, интерфейс и встроенный USB-установщик с отдельной временной домашней папкой и создаёт `dist/Restore-<версия>-linux-x86_64.tar.gz` с файлом `.sha256`. Подробный журнал PyInstaller — `build/linux-build.log`.
 
 ### Пакеты сборки
 

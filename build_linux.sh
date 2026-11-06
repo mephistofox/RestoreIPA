@@ -29,7 +29,7 @@ chmod +x build/res/ipatool
 build/res/ipatool --version
 
 QT_QPA_PLATFORM=offscreen "$RESTORE_PYTHON" -m unittest discover -s tests -q
-if ! "$RESTORE_PYTHON" -m PyInstaller --noconfirm --clean RestoreAppStore.spec > build/linux-build.log 2>&1; then
+if ! "$RESTORE_PYTHON" -m PyInstaller --noconfirm --clean --distpath dist/linux RestoreAppStore.spec > build/linux-build.log 2>&1; then
     tail -n 80 build/linux-build.log >&2
     exit 1
 fi
@@ -41,7 +41,11 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-exe = str(Path("dist/RestoreAppStore/RestoreAppStore").resolve())
+bundle = Path("dist/linux/RestoreAppStore")
+foreign = [str(p) for p in bundle.rglob("*") if p.suffix.lower() in (".dll", ".exe")]
+if foreign:
+    raise SystemExit(f"В Linux-сборку попали файлы Windows: {foreign}")
+exe = str((bundle / "RestoreAppStore").resolve())
 with tempfile.TemporaryDirectory(prefix="restore-build-check-") as check_dir:
     env = dict(os.environ, HOME=check_dir, QT_QPA_PLATFORM="offscreen")
     for key in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
@@ -59,7 +63,7 @@ PY
 
 RESTORE_VERSION=$("$RESTORE_PYTHON" -c 'import restore_apps; print(restore_apps.__version__)')
 RESTORE_ARCHIVE="Restore-$RESTORE_VERSION-linux-x86_64.tar.gz"
-tar -czf "dist/$RESTORE_ARCHIVE" -C dist RestoreAppStore
+tar -czf "dist/$RESTORE_ARCHIVE" -C dist/linux RestoreAppStore
 (cd dist && sha256sum "$RESTORE_ARCHIVE" > "$RESTORE_ARCHIVE.sha256")
 cat "dist/$RESTORE_ARCHIVE.sha256"
 echo "Готово: dist/$RESTORE_ARCHIVE"

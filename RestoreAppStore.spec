@@ -72,6 +72,8 @@ LINUX_KEEP = re.compile(r"qt6?(dbus|opengl(?!widgets)|wayland)")
 
 def needed(entry):
     dest = entry[0].replace("\\", "/").lower()
+    if LINUX and dest.endswith((".dll", ".exe")):
+        return False  # pytun_pmd3 включает wintun для Windows даже в Linux-пакете
     if "/translations/" in dest:  # переводы Qt: оставляем только русский для стандартных окон
         return dest.endswith("qtbase_ru.qm")
     if (MAC and MAC_KEEP.search(dest)) or (LINUX and LINUX_KEEP.search(dest)):

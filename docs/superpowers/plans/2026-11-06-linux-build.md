@@ -30,14 +30,16 @@
 
 **Files:** modify RestoreAppStore.spec, restore_gui/apple.py, restore_gui/backend.py, tests/test_logic.py, README.md; create build_linux.sh.
 
-- [ ] Extend the real bundled-ipatool integrity test to Linux; stage the already verified official binary under build/res and observe the missing Linux hash fail.
-- [ ] Add the verified Linux x86_64 hash and Linux-specific USB instructions.
-- [ ] Extend the spec with Unix binaries, Linux Qt dependency retention, and directory packaging without Windows version resources.
-- [ ] Add build_linux.sh: Python environment, hash-locked dependencies, verified ipatool, full tests, PyInstaller, isolated UI/installer checks, tar.gz and SHA-256 output.
-- [ ] Document Linux build/run prerequisites and host compatibility limits.
-- [ ] Run the full test suite, build, and check the frozen UI and pymobiledevice3 version. Expected: zero failures and a working Linux archive.
-- [ ] Inspect the running native GUI, review the complete diff, commit with the configured identity, and push feat/linux to the requested fork.
+- [x] Extend the real bundled-ipatool integrity test to Linux; stage the already verified official binary under build/res and observe the missing Linux hash fail.
+- [x] Add the verified Linux x86_64 hash and Linux-specific USB instructions.
+- [x] Extend the spec with Unix binaries, Linux Qt dependency retention, and directory packaging without Windows version resources.
+- [x] Add build_linux.sh: Python environment, hash-locked dependencies, verified ipatool, full tests, PyInstaller, isolated UI/installer checks, tar.gz and SHA-256 output.
+- [x] Document Linux build/run prerequisites and host compatibility limits.
+- [x] Run the full test suite, build, and check the frozen UI and pymobiledevice3 version. Expected: zero failures and a working Linux archive.
+- [x] Inspect the running native GUI, review the complete diff, commit with the configured identity, and push feat/linux to the requested fork.
 
 ## Execution record
 
 - Initial inspection: the runtime already has a Linux data-directory fallback; the build spec treats every non-macOS host as Windows and lacks Linux ipatool integrity hashes.
+- Final review found Windows-only wintun DLLs inside collected dependency data. A real artifact assertion failed before filtering; the rebuilt artifact passes the same assertion and all 72 tests (6 platform-specific skips).
+- Final Linux bundle: `dist/linux/RestoreAppStore`. Native Wayland startup, frozen UI, embedded ipatool integrity, pymobiledevice3 version, and targeted USB installer command loading verified. Real Apple login, iPhone installation, Windows/macOS execution and older Linux systems are not verified.
