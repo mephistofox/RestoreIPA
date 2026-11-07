@@ -561,18 +561,25 @@ assert apple.ipatool_genuine(p) is False, 'modified local build accepted'
                                     cwd=Path(__file__).resolve().parent.parent)
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_linux_asset_readiness_uses_new_framework_cache(self):
+    def test_linux_asset_readiness_uses_27_framework_cache(self):
         with tempfile.TemporaryDirectory() as folder:
             cache = Path(folder) / "ipatool"
-            legacy = cache / "sap" / "apple-assets-v2"
-            legacy.mkdir(parents=True)
-            (legacy / "CoreFP").write_bytes(b"old")
+            newer = cache / "sap" / "apple-assets-macos-27-26A434-arm64-v1"
+            newer.mkdir(parents=True)
+            (newer / "AppleMediaServices").write_bytes(b"new")
             with mock.patch.object(core, "IPATOOL_CACHE", cache), mock.patch.object(sys, "platform", "linux"):
-                self.assertFalse(apple.sap_ready(), "старые файлы не готовы для нового движка")
-                current = cache / "sap" / "apple-assets-macos-27-26A434-arm64-v1"
+                self.assertFalse(apple.sap_ready())
+                current = cache / "sap" / "apple-assets-v2"
                 current.mkdir()
-                (current / "AppleMediaServices").write_bytes(b"new")
+                (current / "CoreFP").write_bytes(b"2.7")
                 self.assertTrue(apple.sap_ready())
+
+    @unittest.skipUnless(sys.platform == "linux", "Linux standard engine retries")
+    def test_linux_engine_environment_does_not_disable_retries_or_override_identity(self):
+        with mock.patch.dict(os.environ, IPATOOL_DISABLE_AUTH_RETRIES="1", IPATOOL_DIAGNOSTIC_MAC="02:11:22:33:44:55"):
+            env = core.ipatool_env()
+        self.assertTrue("IPATOOL_DISABLE_AUTH_RETRIES" not in env, "authentication retries disabled")
+        self.assertTrue("IPATOOL_DIAGNOSTIC_MAC" not in env, "diagnostic device ID inherited")
 
     @unittest.skipUnless(sys.platform == "linux", "Linux engine state")
     def test_linux_engine_keeps_session_out_of_inherited_xdg_directories(self):

@@ -16,21 +16,20 @@ RESTORE_PYTHON=build/linux-venv/bin/python
 "$RESTORE_PYTHON" -c 'import sys; assert sys.version_info[:2] == (3, 12), "Нужен Python 3.12"'
 "$RESTORE_PYTHON" -m pip install --disable-pip-version-check -q --require-hashes -r requirements-lock.txt
 
-RESTORE_IPATOOL_REV=d9c0247daea564d3ec7d04a9b015d0a29af66b04
-RESTORE_IPATOOL_VERSION=2.8.0-dev.d9c0247.restore1
-RESTORE_SOURCE_SHA=13c10c4021fefc9614af97c67bf43cd7cf79b255079f6697fe35d252d24c4f9f
-RESTORE_TAR="build/dl/ipatool-d9c0247-source.tar.gz"
+RESTORE_IPATOOL_VERSION=2.7.0.restore-retry10
+RESTORE_SOURCE_SHA=8f88d20bf971d6edbb8780cff8f76c1c565e9f352f21f6da0c6ac48003b3189d
+RESTORE_TAR="build/dl/ipatool-v2.7.0-source.tar.gz"
 mkdir -p build/dl build/res
 if [[ ! -f "$RESTORE_TAR" ]] || ! printf '%s  %s\n' "$RESTORE_SOURCE_SHA" "$RESTORE_TAR" | sha256sum -c --status; then
     curl -fL --connect-timeout 15 --max-time 180 -o "$RESTORE_TAR" \
-        "https://codeload.github.com/majd/ipatool/tar.gz/$RESTORE_IPATOOL_REV"
+        "https://codeload.github.com/majd/ipatool/tar.gz/refs/tags/v2.7.0"
 fi
 printf '%s  %s\n' "$RESTORE_SOURCE_SHA" "$RESTORE_TAR" | sha256sum -c -
 # A fresh source tree keeps generated test mocks out of the production binary.
 RESTORE_SOURCE_DIR=$(mktemp -d build/ipatool-src.XXXXXX)
 trap 'rm -rf "$RESTORE_SOURCE_DIR"' EXIT
 tar -xzf "$RESTORE_TAR" -C "$RESTORE_SOURCE_DIR" --strip-components=1
-patch --batch --forward -p1 -d "$RESTORE_SOURCE_DIR" < patches/ipatool-restore-auth.patch
+patch --batch --forward -p1 -d "$RESTORE_SOURCE_DIR" < patches/ipatool-2.7-retry10.patch
 RESTORE_BINARY_OUT="$(pwd)/build/res/ipatool"
 (cd "$RESTORE_SOURCE_DIR" && GOTOOLCHAIN=go1.26.5 CGO_ENABLED=1 GOOS=linux GOARCH=amd64 GOAMD64=v1 \
     GOEXPERIMENT= GOFLAGS= go build -trimpath -buildvcs=false \

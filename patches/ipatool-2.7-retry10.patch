@@ -1,0 +1,186 @@
+--- a/cmd/common.go
++++ b/cmd/common.go
+@@ -111,9 +111,10 @@
+ 	dependencies.CookieJar = newCookieJar(stateDirectory)
+ 	dependencies.Keychain = newKeychain(stateDirectory, interactive)
+ 	dependencies.AppStore = appstore.NewAppStore(appstore.Args{
+-		CookieJar:       dependencies.CookieJar,
+-		OperatingSystem: dependencies.OS,
+-		Keychain:        dependencies.Keychain,
+-		Machine:         dependencies.Machine,
++		AuthenticationAttempts: 10,
++		CookieJar:              dependencies.CookieJar,
++		OperatingSystem:        dependencies.OS,
++		Keychain:               dependencies.Keychain,
++		Machine:                dependencies.Machine,
+ 	})
+ }
+--- a/pkg/appstore/appstore.go
++++ b/pkg/appstore/appstore.go
+@@ -38,31 +38,33 @@
+ }
+ 
+ type appstore struct {
+-	keychain            keychain.Keychain
+-	loginClient         http.Client[loginResult]
+-	searchClient        http.Client[searchResult]
+-	purchaseClient      http.Client[purchaseResult]
+-	downloadClient      http.Client[downloadResult]
+-	kbsyncGenerator     kbsyncGenerator
+-	kbsyncCache         kbsyncCache
+-	platformClient      http.Client[platformVersionLookupResult]
+-	storefrontClient    http.Client[[]byte]
+-	bagClient           http.Client[bagResult]
+-	ownedAppsClient     http.Client[[]byte]
+-	httpClient          http.Client[interface{}]
+-	macDecrypterFactory macPackageDecrypterFactory
+-	actionSignerFactory ActionSignerFactory
+-	authRetrySleep      func(time.Duration)
+-	machine             machine.Machine
+-	os                  operatingsystem.OperatingSystem
++	keychain               keychain.Keychain
++	loginClient            http.Client[loginResult]
++	searchClient           http.Client[searchResult]
++	purchaseClient         http.Client[purchaseResult]
++	downloadClient         http.Client[downloadResult]
++	kbsyncGenerator        kbsyncGenerator
++	kbsyncCache            kbsyncCache
++	platformClient         http.Client[platformVersionLookupResult]
++	storefrontClient       http.Client[[]byte]
++	bagClient              http.Client[bagResult]
++	ownedAppsClient        http.Client[[]byte]
++	httpClient             http.Client[interface{}]
++	macDecrypterFactory    macPackageDecrypterFactory
++	actionSignerFactory    ActionSignerFactory
++	authRetrySleep         func(time.Duration)
++	authenticationAttempts int
++	machine                machine.Machine
++	os                     operatingsystem.OperatingSystem
+ }
+ 
+ type Args struct {
+-	Keychain            keychain.Keychain
+-	CookieJar           http.CookieJar
+-	OperatingSystem     operatingsystem.OperatingSystem
+-	Machine             machine.Machine
+-	ActionSignerFactory ActionSignerFactory
++	AuthenticationAttempts int
++	Keychain               keychain.Keychain
++	CookieJar              http.CookieJar
++	OperatingSystem        operatingsystem.OperatingSystem
++	Machine                machine.Machine
++	ActionSignerFactory    ActionSignerFactory
+ }
+ 
+ func NewAppStore(args Args) AppStore {
+@@ -76,21 +78,22 @@
+ 	}
+ 
+ 	return &appstore{
+-		keychain:            args.Keychain,
+-		loginClient:         http.NewClient[loginResult](http.Args{CookieJar: args.CookieJar, Authentication: true}),
+-		searchClient:        http.NewClient[searchResult](clientArgs),
+-		purchaseClient:      http.NewClient[purchaseResult](clientArgs),
+-		downloadClient:      http.NewClient[downloadResult](clientArgs),
+-		kbsyncGenerator:     defaultKBSyncGenerator,
+-		platformClient:      http.NewClient[platformVersionLookupResult](clientArgs),
+-		storefrontClient:    http.NewClient[[]byte](clientArgs),
+-		bagClient:           http.NewClient[bagResult](http.Args{CookieJar: args.CookieJar, Timeout: http.DefaultAuthenticationTimeout}),
+-		ownedAppsClient:     http.NewClient[[]byte](clientArgs),
+-		httpClient:          http.NewClient[interface{}](clientArgs),
+-		macDecrypterFactory: defaultMacPackageDecrypterFactory,
+-		actionSignerFactory: actionSignerFactory,
+-		authRetrySleep:      time.Sleep,
+-		machine:             args.Machine,
+-		os:                  args.OperatingSystem,
++		authenticationAttempts: args.AuthenticationAttempts,
++		keychain:               args.Keychain,
++		loginClient:            http.NewClient[loginResult](http.Args{CookieJar: args.CookieJar, Authentication: true}),
++		searchClient:           http.NewClient[searchResult](clientArgs),
++		purchaseClient:         http.NewClient[purchaseResult](clientArgs),
++		downloadClient:         http.NewClient[downloadResult](clientArgs),
++		kbsyncGenerator:        defaultKBSyncGenerator,
++		platformClient:         http.NewClient[platformVersionLookupResult](clientArgs),
++		storefrontClient:       http.NewClient[[]byte](clientArgs),
++		bagClient:              http.NewClient[bagResult](http.Args{CookieJar: args.CookieJar, Timeout: http.DefaultAuthenticationTimeout}),
++		ownedAppsClient:        http.NewClient[[]byte](clientArgs),
++		httpClient:             http.NewClient[interface{}](clientArgs),
++		macDecrypterFactory:    defaultMacPackageDecrypterFactory,
++		actionSignerFactory:    actionSignerFactory,
++		authRetrySleep:         time.Sleep,
++		machine:                args.Machine,
++		os:                     args.OperatingSystem,
+ 	}
+ }
+--- a/pkg/appstore/appstore_login.go
++++ b/pkg/appstore/appstore_login.go
+@@ -229,7 +229,11 @@
+ }
+ 
+ func (t *appstore) sendAuthenticationRequest(request http.Request) (http.Result[loginResult], error) {
+-	statuses := make([]string, 0, maxAuthenticationRequestAttempts)
++	attempts := t.authenticationAttempts
++	if attempts <= 0 {
++		attempts = maxAuthenticationRequestAttempts
++	}
++	statuses := make([]string, 0, attempts)
+ 	onlyHTTP := true
+ 
+ 	sleep := t.authRetrySleep
+@@ -257,7 +261,7 @@
+ 
+ 		statuses = append(statuses, outcome)
+ 
+-		if attempt == maxAuthenticationRequestAttempts {
++		if attempt == attempts {
+ 			summary := strings.Join(statuses, ", ")
+ 			if onlyHTTP {
+ 				// Preserve the existing diagnostic format for HTTP-only failures.
+@@ -266,7 +270,7 @@
+ 
+ 			return result, fmt.Errorf(
+ 				"authentication request failed after %d attempts (%s): %w",
+-				maxAuthenticationRequestAttempts, summary, authenticationRequestError(err),
++				attempts, summary, authenticationRequestError(err),
+ 			)
+ 		}
+ 
+@@ -321,6 +325,7 @@
+ 	// A Store pod can transiently return an HTML 403 page. Populated Apple
+ 	// credential errors are decoded normally and never reach this branch.
+ 	retry := status == gohttp.StatusNoContent ||
++		(http.IsAuthenticationRedirect(status) && responseErr.Reason == "authentication redirect is missing Location") ||
+ 		status == gohttp.StatusForbidden ||
+ 		status == gohttp.StatusNotFound ||
+ 		status == gohttp.StatusTooManyRequests ||
+--- /dev/null
++++ b/pkg/appstore/restore_retry10_test.go
+@@ -0,0 +1,28 @@
++package appstore
++
++import (
++	"errors"
++	apphttp "github.com/majd/ipatool/v2/pkg/http"
++	"go.uber.org/mock/gomock"
++	"testing"
++	"time"
++)
++
++func TestRestoreRetriesTenTransientFailures(t *testing.T) {
++	for _, status := range []int{204, 404, 503, 301} {
++		t.Run(string(rune(status)), func(t *testing.T) {
++			ctrl := gomock.NewController(t)
++			client := apphttp.NewMockClient[loginResult](ctrl)
++			failure := &apphttp.UnexpectedResponseError{StatusCode: status, Reason: "authentication redirect is missing Location"}
++			client.EXPECT().Send(gomock.Any()).Return(apphttp.Result[loginResult]{}, failure).Times(10)
++			sut := NewAppStore(Args{AuthenticationAttempts: 10}).(*appstore)
++			sut.loginClient = client
++			waits := 0
++			sut.authRetrySleep = func(time.Duration) { waits++ }
++			_, err := sut.sendAuthenticationRequest(apphttp.Request{})
++			if !errors.Is(err, failure) || waits != 9 {
++				t.Fatalf("expected ten sends and nine waits; err=%v waits=%d", err, waits)
++			}
++		})
++	}
++}

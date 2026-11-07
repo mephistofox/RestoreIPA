@@ -176,7 +176,8 @@ def ipatool_env(home=None):
         env.pop("XDG_STATE_HOME", None)
         env.pop("XDG_DATA_HOME", None)
         env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/restore-keyring-bus"
-        env["IPATOOL_DISABLE_AUTH_RETRIES"] = "1"
+        env.pop("IPATOOL_DISABLE_AUTH_RETRIES", None)
+        env.pop("IPATOOL_DIAGNOSTIC_MAC", None)
     return env
 
 

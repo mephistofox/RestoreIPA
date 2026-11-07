@@ -27,7 +27,7 @@ SESSION_LOST = re.compile(r"failed to get account|keyring|not logged|sign.?in|pa
 SCAN_ROOT = core.DATA_DIR / "scan"
 UNICORN_VERSION = "2.1.4"
 UNICORN_SHA256 = "d8f9a89222ffa74493a1d47090e17f8e1db8ac171a3128c6a76a4ea09de11469"  # как в исходниках ipatool
-# Закреплённые сборки ipatool; Linux дополнительно применяет patches/ipatool-restore-auth.patch.
+# Закреплённые сборки ipatool; Linux дополнительно применяет patches/ipatool-2.7-retry10.patch.
 # На macOS — хеш кода без подписи (ipatool_digest): PyInstaller переподписывает программы внутри .app
 try:
     from restore_linux_engine import IPATOOL_SHA256 as _LINUX_ENGINE_SHA256
@@ -180,8 +180,7 @@ def seed_unicorn():
 
 def sap_ready():
     """Скачаны ли уже служебные файлы Apple, нужные ipatool для входа."""
-    name = "apple-assets-macos-27-26A434-arm64-v1" if sys.platform.startswith("linux") else "apple-assets-v2"
-    d = core.IPATOOL_CACHE / "sap" / name
+    d = core.IPATOOL_CACHE / "sap" / "apple-assets-v2"
     try:
         return d.is_dir() and any(d.iterdir())
     except OSError:
